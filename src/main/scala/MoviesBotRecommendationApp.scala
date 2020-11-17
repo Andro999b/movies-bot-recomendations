@@ -17,14 +17,17 @@ object Root {
     val recommender = ctx.spawn(Recommender(), "recommender")
     val trainer = ctx.spawn(Trainer(recommender), "trainer")
 
-    Seq("anime", "films").foreach { bot =>
+    config.getStringList("bots.names").forEach { bot =>
       TrainStorage.load(bot) match {
         case Failure(ex) => ctx.log.warn(s"Fail load bot $bot model: ${ex.getMessage}")
         case Success(value) => recommender ! Recommender.SetModel(bot, value)
       }
     }
 
-    Server(RecommendApi(recommender, trainer), "localhost", 9000)
+    val host = config.getString("server.host")
+    val port = config.getInt("server.port")
+
+    Server(RecommendApi(recommender, trainer), host, port)
 
     Behaviors.same
   }
@@ -34,14 +37,14 @@ object MoviesBotRecommendationApp extends App {
 
   val sparkConfig = new SparkConf()
   sparkConfig.setMaster("local[*]")
-//  sparkConfig.set("spark.ui.enabled", "false")
+  sparkConfig.set("spark.ui.enabled", "false")
 
   implicit val spark: SparkSession = SparkSession.builder()
     .appName("local")
     .config(sparkConfig)
     .getOrCreate()
 
-  implicit val config: Config = ConfigFactory.load()
+  implicit val config: Config = ConfigFactory.load().getConfig("app")
 
-  ActorSystem.create(Root(), "root", config)
+  ActorSystem.create(Root(), "root")
 }
